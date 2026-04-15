@@ -1,0 +1,233 @@
+
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body,html{background:transparent}
+#shell{background:#B8B89A;border-radius:12px 12px 40px 40px;padding:24px 22px 36px;max-width:380px;margin:0 auto;font-family:'Press Start 2P',monospace;border-top:3px solid #D4D4B8;border-left:3px solid #D4D4B8;border-right:3px solid #8A8A70;border-bottom:3px solid #6A6A54}
+#screen-bezel{background:#5A5A3E;border-radius:8px 8px 20px 20px;padding:14px 14px 20px;margin-bottom:18px;border-top:3px solid #3A3A28;border-left:3px solid #3A3A28;border-right:3px solid #7A7A5E;border-bottom:3px solid #7A7A5E}
+#brand-strip{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;padding:0 2px}
+#gb-brand{font-size:5px;letter-spacing:0.12em;color:#9BAA6A;text-transform:uppercase}
+#gb-dot{width:6px;height:6px;border-radius:50%;background:#8888CC}
+#screen-inner{background:#9BAA6A;border-radius:4px;padding:0;border:2px solid #3A3A28;overflow:hidden;line-height:0}
+#gc{display:block;image-rendering:pixelated;image-rendering:crisp-edges;width:100%;height:auto}
+#controls-area{display:flex;justify-content:space-between;align-items:center;padding:0 8px;margin-bottom:12px}
+#dpad{display:grid;grid-template-columns:repeat(3,28px);grid-template-rows:repeat(3,28px);gap:0}
+.db{width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#6A6A54;color:#3A3A28;font-size:10px;cursor:pointer;user-select:none;-webkit-user-select:none;border:1px solid #4A4A38}
+.db:active{background:#4A4A38;color:#9BAA6A}
+.dc{background:#5A5A46}
+.de{background:none!important;border:none!important;cursor:default}
+#ab-btns{display:flex;gap:10px;align-items:center;transform:rotate(-20deg)}
+.ab{width:34px;height:34px;border-radius:50%;background:#884466;border-top:2px solid #AA6688;border-left:2px solid #AA6688;border-right:2px solid #662244;border-bottom:2px solid #662244;display:flex;align-items:center;justify-content:center;font-size:6px;color:#FFCCDD;cursor:pointer;user-select:none}
+.ab:active{background:#662244}
+#center-btns{display:flex;gap:8px;justify-content:center;margin-bottom:10px}
+.cb{width:36px;height:12px;border-radius:6px;background:#8A8A70;border-top:1px solid #6A6A54;border-bottom:1px solid #AAAAAA;font-size:4px;color:#5A5A3E;display:flex;align-items:center;justify-content:center;cursor:pointer;letter-spacing:0.05em}
+.cb:active{background:#6A6A54}
+#speaker{display:flex;gap:4px;justify-content:flex-end;padding-right:10px}
+.sp-hole{width:4px;height:20px;background:#9A9A80;border-radius:2px;border:1px solid #7A7A60}
+</style>
+
+<div id="shell">
+  <div id="screen-bezel">
+    <div id="brand-strip">
+      <div id="gb-brand">Morning Consult</div>
+      <div id="gb-dot"></div>
+    </div>
+    <div id="screen-inner"><canvas id="gc"></canvas></div>
+  </div>
+  <div id="controls-area">
+    <div id="dpad">
+      <div class="de"></div><div class="db" id="du">▲</div><div class="de"></div>
+      <div class="db" id="dl">◀</div><div class="dc"></div><div class="db" id="dr">▶</div>
+      <div class="de"></div><div class="db" id="dd">▼</div><div class="de"></div>
+    </div>
+    <div id="ab-btns">
+      <div class="ab" id="btn-b">B</div>
+      <div class="ab" id="btn-a">A</div>
+    </div>
+  </div>
+  <div id="center-btns">
+    <div class="cb" id="btn-select">SELECT</div>
+    <div class="cb" id="btn-start">START</div>
+  </div>
+  <div id="speaker">
+    <div class="sp-hole"></div><div class="sp-hole"></div><div class="sp-hole"></div>
+    <div class="sp-hole"></div><div class="sp-hole"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const WORD = "MORNING CONSULT";
+  const LTRS = WORD.split('').filter(c => c !== ' ');
+  const TOTAL = LTRS.length;
+  const SZ = 12, ROWS = 18;
+  const DPR = window.devicePixelRatio || 1;
+  const C = { bg:'#9BAA6A', grid:'#8A9960', s1:'#2A3018', s2:'#4A5830', txti:'#9BAA6A' };
+
+  const cv = document.getElementById('gc');
+
+  function setup() {
+    const innerW = document.getElementById('screen-inner').clientWidth || 300;
+    const COLS = Math.floor(innerW / SZ);
+    cv.width  = COLS * SZ * DPR;
+    cv.height = ROWS * SZ * DPR;
+    cv.style.width  = (COLS * SZ) + 'px';
+    cv.style.height = (ROWS * SZ) + 'px';
+    const cx = cv.getContext('2d');
+    cx.scale(DPR, DPR);
+    cx.imageSmoothingEnabled = false;
+    return { cx, COLS };
+  }
+
+  let cx, COLS;
+
+  function waitForFont(cb) {
+    if (document.fonts && document.fonts.load) {
+      document.fonts.load('11px "Press Start 2P"').then(cb).catch(cb);
+    } else { setTimeout(cb, 600); }
+  }
+
+  let snake, dir, ndir, food, eaten, score, state, iv, flash;
+
+  function placeFood() {
+    if (eaten >= TOTAL) { food = null; return; }
+    const occ = new Set(snake.map(s => s.x+','+s.y));
+    const pool = [];
+    for (let x=0;x<COLS;x++) for (let y=1;y<ROWS-1;y++) if (!occ.has(x+','+y)) pool.push({x,y});
+    const p = pool[Math.floor(Math.random()*pool.length)];
+    food = {x:p.x, y:p.y, l:LTRS[eaten]};
+  }
+
+  function init() {
+    const mid = Math.floor(ROWS/2);
+    snake = [{x:6,y:mid},{x:5,y:mid},{x:4,y:mid}];
+    dir={x:1,y:0}; ndir={x:1,y:0};
+    eaten=0; score=0; flash=0; state='idle';
+    placeFood(); draw();
+  }
+
+  function startGame() { state='running'; clearInterval(iv); iv=setInterval(tick,130); }
+
+  function tick() {
+    dir={x:ndir.x,y:ndir.y};
+    const hx=snake[0].x+dir.x, hy=snake[0].y+dir.y;
+    if (hx<0||hx>=COLS||hy<0||hy>=ROWS||snake.some(s=>s.x===hx&&s.y===hy)) { die(); return; }
+    snake.unshift({x:hx,y:hy});
+    if (food&&hx===food.x&&hy===food.y) {
+      eaten++; score+=10*eaten; flash=8;
+      if (eaten>=TOTAL) { state='win'; clearInterval(iv); draw(); return; }
+      placeFood();
+    } else { snake.pop(); }
+    if (flash>0) flash--;
+    draw();
+  }
+
+  function die() { state='dead'; clearInterval(iv); draw(); }
+
+  function block(x,y,w,h,col) { cx.fillStyle=col; cx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h)); }
+
+  function drawFood() {
+    if (!food) return;
+    const fx=food.x*SZ, fy=food.y*SZ;
+    const lit=flash>0;
+    block(fx,fy,SZ,SZ, lit ? C.s1 : C.bg);
+    if (!lit) {
+      block(fx,fy,SZ,1,C.s1); block(fx,fy+SZ-1,SZ,1,C.s1);
+      block(fx,fy,1,SZ,C.s1); block(fx+SZ-1,fy,1,SZ,C.s1);
+    }
+    cx.fillStyle = lit ? C.txti : C.s1;
+    cx.font = '11px "Press Start 2P", monospace';
+    cx.textAlign='center'; cx.textBaseline='middle';
+    cx.fillText(food.l, fx+SZ/2, fy+SZ/2+1);
+  }
+
+  function draw() {
+    const W=COLS*SZ, H=ROWS*SZ;
+    block(0,0,W,H,C.bg);
+    cx.strokeStyle=C.grid; cx.lineWidth=0.5;
+    for(let x=0;x<=COLS;x++){cx.beginPath();cx.moveTo(x*SZ,0);cx.lineTo(x*SZ,H);cx.stroke();}
+    for(let y=0;y<=ROWS;y++){cx.beginPath();cx.moveTo(0,y*SZ);cx.lineTo(W,y*SZ);cx.stroke();}
+
+    if (state==='idle') {
+      const bx=W/2,by=H/2;
+      block(bx-76,by-20,152,40,C.s1); block(bx-74,by-18,148,36,C.bg);
+      lbl('PRESS START',bx,by-9,C.s1,6); lbl('TO PLAY',bx,by+7,C.s2,6);
+      return;
+    }
+    if (state==='dead') {
+      const bx=W/2,by=H/2;
+      block(bx-74,by-22,148,44,C.s1); block(bx-72,by-20,144,40,C.bg);
+      lbl('GAME OVER',bx,by-9,C.s1,6); lbl('SCR:'+score,bx,by+8,C.s2,6);
+      return;
+    }
+    if (state==='win') {
+      const bx=W/2,by=H/2;
+      block(bx-80,by-26,160,52,C.s1); block(bx-78,by-24,156,48,C.bg);
+      lbl('YOU WIN!',bx,by-13,C.s1,6); lbl('MORNING',bx,by+1,C.s2,6); lbl('CONSULT',bx,by+15,C.s2,6);
+      return;
+    }
+
+    drawFood();
+
+    snake.forEach((seg,i)=>{
+      cx.globalAlpha=i===0?1:Math.max(0.3,1-i*0.06);
+      if(i===0){
+        block(seg.x*SZ+1,seg.y*SZ+1,SZ-2,SZ-2,C.s1);
+        cx.globalAlpha=0.5; block(seg.x*SZ+2,seg.y*SZ+2,2,2,C.bg);
+      } else { block(seg.x*SZ+2,seg.y*SZ+2,SZ-4,SZ-4,C.s2); }
+      cx.globalAlpha=1;
+    });
+
+    lbl('SCR:'+score, 3, 6, C.s2, 5, 'left');
+
+    const progFont = 5;
+    cx.font = progFont+'px "Press Start 2P", monospace';
+    cx.textBaseline='middle';
+    const progY = H - SZ/2;
+    const totalLetterW = TOTAL * 8 + 6;
+    const startX = Math.round((W - totalLetterW) / 2);
+    for (let i=0;i<TOTAL;i++) {
+      cx.globalAlpha = i<eaten ? 1 : i===eaten ? 1 : 0.35;
+      cx.fillStyle   = i<eaten ? C.s1 : i===eaten ? C.s1 : C.s2;
+      cx.textAlign   = 'center';
+      const gap = i >= 7 ? 6 : 0;
+      cx.fillText(LTRS[i], startX + i*8 + gap + 4, progY);
+    }
+    cx.globalAlpha=1;
+  }
+
+  function lbl(str,x,y,col,size,align) {
+    cx.fillStyle=col; cx.font=size+'px "Press Start 2P",monospace';
+    cx.textAlign=align||'center'; cx.textBaseline='middle';
+    cx.fillText(str,x,y);
+  }
+
+  function setDir(dx,dy) { if(dir.x===-dx&&dir.y===-dy)return; ndir={x:dx,y:dy}; }
+
+  document.addEventListener('keydown',function(e){
+    if(!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))return;
+    e.preventDefault();
+    if(e.key===' '){if(state!=='running'){if(state==='dead'||state==='win')init();startGame();}return;}
+    if(state!=='running')return;
+    if(e.key==='ArrowUp')setDir(0,-1); if(e.key==='ArrowDown')setDir(0,1);
+    if(e.key==='ArrowLeft')setDir(-1,0); if(e.key==='ArrowRight')setDir(1,0);
+  });
+
+  document.getElementById('du').addEventListener('click',function(){if(state==='running')setDir(0,-1);});
+  document.getElementById('dd').addEventListener('click',function(){if(state==='running')setDir(0,1);});
+  document.getElementById('dl').addEventListener('click',function(){if(state==='running')setDir(-1,0);});
+  document.getElementById('dr').addEventListener('click',function(){if(state==='running')setDir(1,0);});
+
+  function tryStart(){if(state==='dead'||state==='win')init();startGame();}
+  document.getElementById('btn-start').addEventListener('click',tryStart);
+  document.getElementById('btn-a').addEventListener('click',tryStart);
+  document.getElementById('btn-b').addEventListener('click',tryStart);
+  document.getElementById('btn-select').addEventListener('click',function(){if(state==='running')init();});
+
+  waitForFont(function(){
+    const r = setup();
+    cx = r.cx; COLS = r.COLS;
+    init();
+  });
+})();
+</script>
